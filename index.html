@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Écoles et hôpitaux de Lomé</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  #map { height: 100%; }
+  .recherche { background: #fff; padding: 6px; border-radius: 6px; width: 230px;
+    box-shadow: 0 1px 5px rgba(0,0,0,.4); }
+  .recherche input { width: 100%; box-sizing: border-box; padding: 6px; }
+  .recherche button { display: block; width: 100%; text-align: left; border: 0;
+    background: none; padding: 5px; cursor: pointer; font-size: 13px; }
+  .recherche button:hover { background: #e5e7eb; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="ecoles.js"></script>
+<script src="hopitaux.js"></script>
+<script>
+  const map = L.map('map').setView([6.1725, 1.2314], 12);
+
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© contributeurs <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  const index = [];
+
+  function couche(donnees, couleur, libelle) {
+    return L.geoJSON(donnees, {
+      pointToLayer: (f, latlng) =>
+        L.circleMarker(latlng, { radius: 6, color: couleur, fillOpacity: 0.7 }),
+      onEachFeature: (f, layer) => {
+        const nom = f.properties.name;
+        const div = document.createElement('div');
+        div.textContent = nom || (libelle + ' sans nom');
+        layer.bindPopup(div);
+        if (nom) index.push({ nom, layer });
+      }
+    });
+  }
+
+  const couches = {};
+  if (typeof ecoles !== 'undefined') {
+    couches['Écoles (bleu)'] = couche(ecoles, '#1d4ed8', 'École').addTo(map);
+  }
+  if (typeof hopitaux !== 'undefined') {
+    couches['Hôpitaux (rouge)'] = couche(hopitaux, '#dc2626', 'Établissement').addTo(map);
+  }
+  L.control.layers(null, couches, { collapsed: false }).addTo(map);
+
+  // Recherche par nom (sans tenir compte des accents ni des majuscules)
+  const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+  const recherche = L.control({ position: 'topleft' });
+  recherche.onAdd = () => {
+    const box = L.DomUtil.create('div', 'recherche');
+    box.innerHTML = '<input id="q" type="search" placeholder="Rechercher un nom…"><div id="res"></div>';
+    L.DomEvent.disableClickPropagation(box);
+    L.DomEvent.disableScrollPropagation(box);
+    return box;
+  };
+  recherche.addTo(map);
+
+  document.getElementById('q').addEventListener('input', e => {
+    const q = norm(e.target.value.trim());
+    const res = document.getElementById('res');
+    res.innerHTML = '';
+    if (q.length < 2) return;
+    index.filter(i => norm(i.nom).includes(q)).slice(0, 8).forEach(i => {
+      const b = document.createElement('button');
+      b.textContent = i.nom;
+      b.onclick = () => {
+        map.setView(i.layer.getLatLng(), 17);
+        i.layer.openPopup();
+      };
+      res.appendChild(b);
+    });
+  });
+</script>
+</body>
+</html>
